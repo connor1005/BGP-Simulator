@@ -1,41 +1,17 @@
-# Prerequisites
-*.d
-
-# Compiled Object files
-*.slo
-*.lo
+# 1. Compiled Executables
+bgp_sim
 *.o
-*.obj
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Linker files
-*.ilk
-
-# Debugger Files
-*.pdb
-
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
-
-# Executables
-*.exe
 *.out
-*.app
 
-# debug information files
-*.dwo
+# 2. Large Datasets
+# Ignore all text and CSV files in the data folder to prevent massive uploads
+data/*.txt
+data/*.csv
+# BUT keep our tiny test file so the repository is still testable
+!data/test_caida.txt
+
+# 3. OS & IDE Specific Files (Just to keep things clean)
+.DS_Store
+.vscode/
+.idea/
+*.swp
