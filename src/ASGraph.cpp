@@ -298,3 +298,19 @@ void ASGraph::propagate_down() {
     }
     std::cout << "Propagation Down phase complete.\n";
 }
+
+void ASGraph::load_rov_asns(const std::string& filename) {
+    std::ifstream file(filename);
+    std::string line;
+    if (!file.is_open()) return;
+
+    while (std::getline(file, line)) {
+        if (line.empty()) continue;
+        uint32_t rov_asn = std::stoul(line);
+        
+        if (as_nodes.count(rov_asn)) {
+            // Replace the standard BGP brain with an ROV brain 
+            as_nodes[rov_asn]->bgp_policy = std::make_unique<ROV>();
+        }
+    }
+}

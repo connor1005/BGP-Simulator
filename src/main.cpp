@@ -1,60 +1,50 @@
 #include <iostream>
-#include <vector>
-#include <string>
 #include "../include/ASGraph.hpp"
 #include "../include/BGP.hpp"
 
 int main() {
     ASGraph graph;
+    graph.parse_caida_file("data/test_caida.txt");
+    
+    // 1. Load ROV Defense
+    // AS 2 will now use the ROV policy instead of standard BGP
+    graph.load_rov_asns("data/rov_asns.txt");
 
-    // 1. Load the Graph
-    std::cout << "Loading CAIDA dataset...\n";
-    // Point this to your test file or the full CAIDA dataset
-    graph.parse_caida_file("data/test_caida.txt"); 
-
-    // 2. Validate Topology
-    // Requirement: Must error out if provider/customer cycles exist [cite: 84, 220]
-    std::cout << "Running cycle detection...\n";
     graph.check_cycles();
-
-    // 3. Flatten the Graph
-    // Requirement: Turn DAG into vector of vectors for propagation ranks [cite: 139, 140]
-    std::cout << "Flattening the graph...\n";
     graph.flatten_graph();
 
-    std::cout << "\n--- Seeding & Propagation ---\n";
+    // 2. The Hijack Scenario
+    std::string hijacked_prefix = "1.2.0.0/16";
 
-    // 4. Seed Announcements
-    // Seeding at the bottom to test Up/Across [cite: 145]
-    graph.seed_announcement(4, "8.8.8.0/24");
-    // Seeding at the top to test Down [cite: 145]
-    graph.seed_announcement(1, "1.1.1.0/24");
+    // Legitimate announcement from AS 1
+    graph.seed_announcement(1, hijacked_prefix);
 
-    // 5. Propagation Phases
-    // Step 1: Up (to providers) [cite: 147, 148]
+    // HIJACK: AS 4 announces the same prefix, but it's marked invalid
+    // We need a slight manual tweak here to simulate the 'invalid' flag
+    auto hijacker_bgp = dynamic_cast<BGP*>(graph.as_nodes[4]->bgp_policy.get());
+    Announcement hijack_ann;
+    hijack_ann.prefix = hijacked_prefix;
+    hijack_ann.as_path = {4};
+    hijack_ann.next_hop_asn = 4;
+    hijack_ann.recv_relationship = Relationship::ORIGIN;
+    hijack_ann.rov_invalid = true; // This is the "fake" announcement [cite: 200, 210]
+    hijacker_bgp->local_rib[hijacked_prefix] = hijack_ann;
+
+    // 3. Run Simulation
     graph.propagate_up();
-
-    // Step 2: Across (to peers - strictly one hop) [cite: 147, 157]
     graph.propagate_across();
-
-    // Step 3: Down (to customers) [cite: 147, 161]
     graph.propagate_down();
 
-    // 6. Verify Results (Local RIBs)
-    // Requirement: ASes store one entry per prefix in the local RIB [cite: 127, 129]
-    std::cout << "\n--- Final Routing Tables (Local RIB) ---\n";
-    for (const auto& [asn, node] : graph.as_nodes) {
-        auto bgp = dynamic_cast<BGP*>(node->bgp_policy.get());
-        if (bgp && !bgp->local_rib.empty()) {
-            std::cout << "AS " << asn << " RIB:\n";
-            for (const auto& [prefix, ann] : bgp->local_rib) {
-                std::cout << "  - Prefix: " << prefix 
-                          << " | Path: ";
-                for (size_t i = 0; i < ann.as_path.size(); ++i) {
-                    std::cout << ann.as_path[i] << (i == ann.as_path.size() - 1 ? "" : "-");
-                }
-                std::cout << " | NextHop: " << ann.next_hop_asn << "\n";
-            }
+    // 4. Verify ROV Logic
+    std::cout << "\n--- ROV Test Results ---\n";
+    for (uint32_t asn : {2, 3}) {
+        auto bgp = dynamic_cast<BGP*>(graph.as_nodes[asn]->bgp_policy.get());
+        if (bgp && bgp->local_rib.count(hijacked_prefix)) {
+            const auto& ann = bgp->local_rib[hijacked_prefix];
+            std::cout << "AS " << asn << " (ROV: " << (asn == 2 ? "YES" : "NO") << ") ";
+            std::cout << "chose path: ";
+            for (uint32_t p : ann.as_path) std::cout << p << " ";
+            std::cout << (ann.rov_invalid ? "[HIJACKED!]" : "[SAFE]") << "\n";
         }
     }
 

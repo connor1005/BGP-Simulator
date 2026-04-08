@@ -14,13 +14,19 @@ public:
 
 // Concrete BGP Policy
 class BGP : public Policy {
-private:
-	bool is_better(const Announcement& new_ann, const Announcement& current_ann);
 public:
     std::unordered_map<std::string, Announcement> local_rib;
     std::unordered_map<std::string, std::vector<Announcement>> received_queue;
 
-    void process_queue(uint32_t current_asn);
+    virtual void process_queue(uint32_t current_asn);
+
+protected:
+	bool is_better(const Announcement& new_ann, const Announcement& current_ann);
+};
+
+class ROV : public BGP {
+public:
+	void process_queue(uint32_t current_asn) override;
 };
 
 #endif

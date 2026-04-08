@@ -21,6 +21,7 @@ public:
     void flatten_graph();
 
     void seed_announcement(uint32_t origin_asn, const std::string& prefix);
+    void load_rov_asns(const std::string& filename);
 
     void propagate_up();
     void propagate_across();
