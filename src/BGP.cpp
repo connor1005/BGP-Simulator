@@ -2,7 +2,7 @@
 
 bool BGP::is_better(const Announcement& new_ann, const Announcement& current_ann){
 	if (new_ann.recv_relationship != current_ann.recv_relationship) {
-		return new_ann.recv_relationship > current_ann.recv_relationship;
+		return (int)new_ann.recv_relationship > (int)current_ann.recv_relationship;
 	}
 
 	if (new_ann.as_path.size() != current_ann.as_path.size()) {
@@ -20,10 +20,8 @@ void BGP::process_queue(uint32_t current_asn) {
 			if (local_rib.find(prefix) == local_rib.end()){
 				local_rib[prefix] = processed_ann;
 			}
-			else {
-				if (is_better(processed_ann, local_rib[prefix])) {
+			else if (is_better(processed_ann, local_rib[prefix])) {
 					local_rib[prefix] = processed_ann;
-				}
 			}
 		}
 	}
@@ -34,7 +32,6 @@ void ROV::process_queue(uint32_t current_asn) {
     for (auto& [prefix, announcements] : received_queue) {
         for (const Announcement& ann : announcements) {
             
-            // ROV RULE: If announcement is invalid, DROP IT 
             if (ann.rov_invalid) {
                 continue; 
             }

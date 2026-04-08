@@ -6,13 +6,11 @@
 #include <string>
 #include "Announcement.hpp"
 
-// Abstract base class for routing policies
 class Policy {
 public:
     virtual ~Policy() = default;
 };
 
-// Concrete BGP Policy
 class BGP : public Policy {
 public:
     std::unordered_map<std::string, Announcement> local_rib;
