@@ -1,6 +1,7 @@
 #include <cstdint>
 #include <vector>
 #include <memory>
+#include "BGP.hpp"
 
 class Policy;
 
@@ -14,8 +15,7 @@ public:
     std::vector<std::weak_ptr<AS>> customers;
     std::vector<std::weak_ptr<AS>> peers;
     
-    // We will eventually need a pointer to a concrete Policy object 
-    // std::unique_ptr<Policy> bgp_policy;
+    std::unique_ptr<Policy> bgp_policy;
 
     // Constructor
     AS(uint32_t id) : asn(id) {}
