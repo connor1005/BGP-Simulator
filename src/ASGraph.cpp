@@ -102,3 +102,57 @@ void ASGraph::check_cycles() {
     
     std::cout << "Cycle check complete: Graph is a valid Directed Acyclic Graph (DAG).\n";
 }
+
+int ASGraph::calculate_rank(std::shared_ptr<AS> as_node, std::unordered_map<uint32_t, int>& memo) {
+    // If we already calculated this node's rank, return it immediately
+    if (memo.find(as_node->asn) != memo.end()) {
+        return memo[as_node->asn];
+    }
+
+    // Base case: If the node has no customers, its rank is 0
+    if (as_node->customers.empty()) {
+        memo[as_node->asn] = 0;
+        as_node->propagation_rank = 0;
+        return 0;
+    }
+
+    // Recursive case: Rank is 1 + the max rank of all its customers
+    int max_customer_rank = -1;
+    for (auto& weak_cust : as_node->customers) {
+        if (auto cust = weak_cust.lock()) {
+            int cust_rank = calculate_rank(cust, memo);
+            if (cust_rank > max_customer_rank) {
+                max_customer_rank = cust_rank;
+            }
+        }
+    }
+
+    int final_rank = max_customer_rank + 1;
+    memo[as_node->asn] = final_rank;
+    as_node->propagation_rank = final_rank;
+    
+    return final_rank;
+}
+
+void ASGraph::flatten_graph() {
+    std::unordered_map<uint32_t, int> memo;
+    int highest_rank = 0;
+
+    // 1. Calculate the rank for every node
+    for (auto& [asn, as_node] : as_nodes) {
+        int rank = calculate_rank(as_node, memo);
+        if (rank > highest_rank) {
+            highest_rank = rank;
+        }
+    }
+
+    // 2. Resize our 2D vector to hold all the ranks we found
+    ranks.resize(highest_rank + 1);
+
+    // 3. Place each node into its corresponding rank bucket
+    for (auto& [asn, as_node] : as_nodes) {
+        ranks[as_node->propagation_rank].push_back(as_node);
+    }
+
+    std::cout << "Graph flattened successfully into " << ranks.size() << " ranks.\n";
+}
