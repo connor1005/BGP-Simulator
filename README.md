@@ -8,7 +8,7 @@ A high-performance C++ simulator designed to model Internet routing, valley-free
 * **Cycle Detection:** Automatically detects and handles provider/customer cycles in the CAIDA topology.
 
 ## Speed Optimizations & Design Decisions
-To ensure maximum execution speed for large datasets (e.g., the `many` dataset), the following optimizations were implemented:
+To ensure maximum execution speed for large datasets, the following optimizations were implemented:
 * **Efficient Memory Allocation:** Graph nodes and relationships are managed using smart pointers (`std::shared_ptr`) to prevent memory leaks and reduce deep copy overhead.
 * **Optimized String Passing:** Strings (like AS paths and prefixes) are passed by constant reference (`const std::string&`) throughout the propagation loops to eliminate expensive memory allocations.
 * **Hash Maps for Lookups:** Standard ordered `std::map` structures were replaced with `std::unordered_map` where possible, reducing graph traversal lookups from $O(\log n)$ to $O(1)$.
