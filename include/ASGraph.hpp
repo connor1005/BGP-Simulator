@@ -13,17 +13,19 @@ private:
 	int calculate_rank(std::shared_ptr<AS> as_node, std::unordered_map<uint32_t, int>& memo);
 
 public:
-    // hash map actually OWNS the AS objects in memory
     std::unordered_map<uint32_t, std::shared_ptr<AS>> as_nodes;
-
     std::vector<std::vector<std::shared_ptr<AS>>> ranks;
 
-    // core functionality
-    void parse_caida_file(const std::string& filename);
-    
+    void parse_caida_file(const std::string& filename); 
     void check_cycles();
-
     void flatten_graph();
+
+    void seed_announcement(uint32_t origin_asn, const std::string& prefix);
+
+    void propagate_up();
+    void propagate_across();
+    void propagate_down();
+
 };
 
 #endif

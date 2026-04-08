@@ -36,9 +36,11 @@ void ASGraph::parse_caida_file(const std::string& filename) {
         // Create the AS nodes in our map if they don't exist yet
         if (as_nodes.find(asn0) == as_nodes.end()) {
             as_nodes[asn0] = std::make_shared<AS>(asn0);
+	    as_nodes[asn0]->bgp_policy = std::make_unique<BGP>();
         }
         if (as_nodes.find(asn1) == as_nodes.end()) {
             as_nodes[asn1] = std::make_shared<AS>(asn1);
+	    as_nodes[asn1]->bgp_policy = std::make_unique<BGP>();
         }
 
         // Link the nodes based on the relationship value
@@ -155,4 +157,144 @@ void ASGraph::flatten_graph() {
     }
 
     std::cout << "Graph flattened successfully into " << ranks.size() << " ranks.\n";
+}
+
+void ASGraph::seed_announcement(uint32_t origin_asn, const std::string& prefix) {
+    if (as_nodes.find(origin_asn) == as_nodes.end()) {
+        std::cerr << "Error: Origin AS " << origin_asn << " not found in graph.\n";
+        return;
+    }
+
+    Announcement seed_ann;
+    seed_ann.prefix = prefix;
+    seed_ann.as_path = {origin_asn};       // The path starts here
+    seed_ann.next_hop_asn = origin_asn;    // It came from itself
+    seed_ann.recv_relationship = Relationship::ORIGIN; // Top priority!
+
+    // Store it directly into the origin node's local RIB
+    auto bgp = dynamic_cast<BGP*>(as_nodes[origin_asn]->bgp_policy.get());
+    if (bgp) {
+        bgp->local_rib[prefix] = seed_ann;
+        std::cout << "Seeded prefix " << prefix << " at AS " << origin_asn << "\n";
+    }
+}
+
+void ASGraph::propagate_up() {
+    // Traverse from rank 0 (bottom) up to the highest rank (top)
+    for (size_t rank = 0; rank < ranks.size(); ++rank) {
+        
+        // 1. Process Phase: Every AS in this rank processes its queue
+        for (auto& as_node : ranks[rank]) {
+            auto bgp = dynamic_cast<BGP*>(as_node->bgp_policy.get());
+            if (bgp) {
+                // This handles conflict resolution and stores best routes in the Local RIB
+                bgp->process_queue(as_node->asn);
+            }
+        }
+
+        // 2. Sending Phase: Every AS in this rank sends its stored routes to its providers
+        for (auto& as_node : ranks[rank]) {
+            auto bgp = dynamic_cast<BGP*>(as_node->bgp_policy.get());
+            if (bgp && !bgp->local_rib.empty()) {
+                
+                // Loop through all of this node's providers
+                for (auto& weak_provider : as_node->providers) {
+                    if (auto provider = weak_provider.lock()) {
+                        auto prov_bgp = dynamic_cast<BGP*>(provider->bgp_policy.get());
+                        if (prov_bgp) {
+                            
+                            // Send every route we have in our RIB to the provider
+                            for (const auto& [prefix, ann] : bgp->local_rib) {
+                                Announcement out_ann = ann;
+                                
+                                // To our provider, we are their customer. 
+                                out_ann.recv_relationship = Relationship::CUSTOMER;
+                                out_ann.next_hop_asn = as_node->asn;
+                                
+                                // Drop it in the provider's queue for them to process next rank
+                                prov_bgp->received_queue[prefix].push_back(out_ann);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    std::cout << "Propagation Up phase complete.\n";
+}
+
+void ASGraph::propagate_across() {
+    // Step 1: ALL ASes send their RIBs to their peers' received_queues
+    for (auto& [asn, as_node] : as_nodes) {
+        auto bgp = dynamic_cast<BGP*>(as_node->bgp_policy.get());
+        if (bgp && !bgp->local_rib.empty()) {
+            
+            for (auto& weak_peer : as_node->peers) {
+                if (auto peer = weak_peer.lock()) {
+                    auto peer_bgp = dynamic_cast<BGP*>(peer->bgp_policy.get());
+                    if (peer_bgp) {
+                        for (const auto& [prefix, ann] : bgp->local_rib) {
+                            Announcement out_ann = ann;
+                            
+                            // Relationship is PEER, next hop is the current ASN
+                            out_ann.recv_relationship = Relationship::PEER;
+                            out_ann.next_hop_asn = asn;
+                            
+                            peer_bgp->received_queue[prefix].push_back(out_ann);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Step 2: ALL ASes process their queues (after everyone has finished sending)
+    for (auto& [asn, as_node] : as_nodes) {
+        auto bgp = dynamic_cast<BGP*>(as_node->bgp_policy.get());
+        if (bgp) {
+            bgp->process_queue(asn);
+        }
+    }
+    std::cout << "Propagation Across phase complete.\n";
+}
+
+void ASGraph::propagate_down() {
+    // Traverse from the highest rank down to rank 0
+    for (int rank = (int)ranks.size() - 1; rank >= 0; --rank) {
+        
+        // 1. Sending Phase: ASes in this rank send RIBs to customers
+        for (auto& as_node : ranks[rank]) {
+            auto bgp = dynamic_cast<BGP*>(as_node->bgp_policy.get());
+            if (bgp && !bgp->local_rib.empty()) {
+                
+                for (auto& weak_cust : as_node->customers) {
+                    if (auto customer = weak_cust.lock()) {
+                        auto cust_bgp = dynamic_cast<BGP*>(customer->bgp_policy.get());
+                        if (cust_bgp) {
+                            for (const auto& [prefix, ann] : bgp->local_rib) {
+                                Announcement out_ann = ann;
+                                
+                                // Relationship is CUSTOMER, next hop is current ASN
+                                out_ann.recv_relationship = Relationship::PROVIDER;
+                                out_ann.next_hop_asn = as_node->asn;
+                                
+                                cust_bgp->received_queue[prefix].push_back(out_ann);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Process Phase: The rank BELOW must process what they just received
+        if (rank > 0) {
+            for (auto& lower_node : ranks[rank - 1]) {
+                auto lower_bgp = dynamic_cast<BGP*>(lower_node->bgp_policy.get());
+                if (lower_bgp) {
+                    lower_bgp->process_queue(lower_node->asn);
+                }
+            }
+        }
+    }
+    std::cout << "Propagation Down phase complete.\n";
 }
