@@ -8,8 +8,10 @@ A high-performance C++ simulator designed to model Internet routing, valley-free
 * **Cycle Detection:** Automatically detects and handles provider/customer cycles in the CAIDA topology.
 
 ## Speed Optimizations & Design Decisions
-To ensure maximum execution speed for large datasets, the following optimizations were implemented:
-* **Efficient Memory Allocation:** Graph nodes and relationships are managed using smart pointers (`std::shared_ptr`) to prevent memory leaks and reduce deep copy overhead.
-* **Optimized String Passing:** Strings (like AS paths and prefixes) are passed by constant reference (`const std::string&`) throughout the propagation loops to eliminate expensive memory allocations.
-* **Hash Maps for Lookups:** Standard ordered `std::map` structures were replaced with `std::unordered_map` where possible, reducing graph traversal lookups from $O(\log n)$ to $O(1)$.
-* **Polymorphic Fast-Pathing:** The ROV logic is built as a subclass that overrides the standard BGP queue processing, meaning standard nodes don't waste CPU cycles checking ROV flags if they haven't deployed the defense.
+
+To ensure maximum execution speed and stability for large datasets, the following C++ optimizations were implemented:
+
+* **Cyclic-Safe Memory Management:** Graph relationships are modeled using a strict `std::shared_ptr` / `std::weak_ptr` paradigm. Nodes own themselves, while relationship edges (providers, peers, customers) use `weak_ptr.lock()` during traversal. This prevents cyclical reference memory leaks common in dense BGP topologies without requiring manual garbage collection.
+* **Hash Maps for Lookups:** Standard ordered `std::map` structures were replaced with `std::unordered_map` for the core `as_nodes` registry, reducing graph traversal and node lookups from $O(\log n)$ to $O(1)$.
+* **Reference-Based Iteration:** During the intensive `propagate` phases, the Routing Information Bases (RIBs) are traversed using structured binding with constant references (`const auto& [prefix, ann]`). This prevents expensive and continuous reallocation of prefix string keys when building outbound queues.
+* **Polymorphic Fast-Pathing:** The BGP policy engine is abstracted (`bgp_policy.get()`). This allows the ROV logic to be built as a subclass that overrides the standard queue processing, meaning standard BGP nodes don't waste CPU cycles checking ROV flag conditionals if they haven't explicitly deployed the defense.

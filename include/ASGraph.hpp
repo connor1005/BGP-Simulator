@@ -28,6 +28,11 @@ public:
 	
 	void load_announcements(const std::string& filename);
 	void write_ribs_csv(const std::string& filename);
+
+	void parse_caida_file_from_string(const std::string& csv_content);
+	void load_rov_asns_from_string(const std::string& csv_content);
+	void load_announcements_from_string(const std::string& csv_content);
+	std::string get_rib_for_asn_as_string(uint32_t target_asn);
 };
 
 #endif

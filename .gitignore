@@ -15,3 +15,4 @@ data/*.csv
 .vscode/
 .idea/
 *.swp
+ribs.csv
