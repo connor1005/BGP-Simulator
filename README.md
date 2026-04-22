@@ -1,6 +1,6 @@
 # BGP Simulator (C++ Engine)
 
-A high-performance C++ simulator designed to model Internet routing, valley-free path propagation, and Route Origin Validation (ROV). This project reads CAIDA topology files, processes BGP announcements, and calculates the resulting Routing Information Bases (RIBs) for Autonomous Systems.
+A C++ simulator designed to model Internet routing, valley-free path propagation, and Route Origin Validation (ROV). This project reads CAIDA topology files, processes BGP announcements, and calculates the resulting Routing Information Bases (RIBs) for Autonomous Systems.
 
 ## Features
 * **Valley-Free Routing:** Implements standard BGP export policies (Customer -> Provider, Peer -> Peer, etc.) using a rank-based graph traversal.
